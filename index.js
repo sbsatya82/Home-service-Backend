@@ -5,7 +5,8 @@ const servicesRoutes = require('./routes/services');
 const customerRoutes = require('./routes/customer');
 const bookingRoutes = require('./routes/booking');
 const searchRoutes = require('./routes/searchRoute');
-const dashboardRoutes = require('./routes/dashboard')
+const dashboardRoutes = require('./routes/dashboard');
+const pgRoutes = require('./routes/phonepePg.js');
 
 require('dotenv').config();
 const app = express();
@@ -25,6 +26,7 @@ app.use('/api/customers', customerRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/pg', pgRoutes); 
 
 // Start Server
 app.listen(PORT, () => {
