@@ -14,7 +14,10 @@ const PORT = process.env.PORT || 5000;
 
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin : "*",
+  credentials: true, // allow session cookies
+}));
 app.use(bodyParser.json());
 
 app.get('/', (req, res) => {
