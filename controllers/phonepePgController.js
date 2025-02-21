@@ -15,29 +15,6 @@ const generateChecksum = (data, endpoint) => {
   return crypto.createHash("sha256").update(string).digest("hex") + "###" + SALT_INDEX;
 };
 
-// ✅ Update transaction status in DB
-const updateTransactionStatus = async ({ orderId, status, transactionId, paymentMethod, referenceId, message }) => {
-  try {
-    const sql = `
-    UPDATE transactions 
-    SET 
-        status = ?, 
-        transactionId = ?, 
-        paymentMethod = ?, 
-        referenceId = ?, 
-        errorMessage = ?
-    WHERE orderId = ?;
-`;
-
-    const [result] = await db.query(sql, [status, transactionId, paymentMethod, referenceId || null, message || null, orderId]);
-    console.log("✅ Transaction update result:", result);
-    return result;
-  } catch (error) {
-    console.error("❌ Error updating transaction:", error);
-    throw error;
-  }
-};
-
 // ✅ Create order and store in DB
 exports.createOrder = async (req, res) => {
   try {
@@ -102,7 +79,7 @@ exports.paymentCallback = async (req, res) => {
     const endpoint = `/pg/v1/status/${MERCHANT_ID}/${merchantTransactionId}`;
     const checksum = generateChecksum(endpoint, "");
     
-    const response = await axios.get(`${PHONEPE_BASE_URL}${endpoint}`, {
+    const {data} = await axios.get(`${PHONEPE_BASE_URL}${endpoint}`, {
       headers: {
         accept: "application/json",
         "Content-Type": "application/json",
@@ -111,21 +88,38 @@ exports.paymentCallback = async (req, res) => {
       },
     });
     
-    const { data, message } = response;
-    console.log("📦 Callback Response:", data);
     
-    await updateTransactionStatus({
-      orderId: data.merchantTransactionId,
-      status: data.state,
-      transactionId: data.transactionId,
-      paymentMethod: data.paymentInstrument?.type || "UNKNOWN",
-      referenceId: data.authRefId,
-      message,
-    });
-    
+    if (!data || !data.data) {
+      return res.status(400).json({ success: false, message: "Invalid response from PhonePe" });
+    }
+
+    const { transactionId, state, paymentInstrument, authRefId } = data.data;
+
+    const status = state || "UNKNOWN";
+    const paymentMethod = paymentInstrument?.type || "UNKNOWN";
+    const referenceId = authRefId || null;
+    const message = data.message || null;
+
+    // ✅ Update transaction status in DB
+    const sql = `
+      UPDATE transactions 
+      SET 
+          status = ?, 
+          transactionId = ?, 
+          paymentMethod = ?, 
+          referenceId = ?, 
+          errorMessage = ?,
+          updatedAt = NOW()
+      WHERE orderId = ?;
+    `;
+
+    const [result] = await db.query(sql, [status, transactionId, paymentMethod, referenceId, message, merchantTransactionId]);
+
     return res.status(200).json({ success: true, message: "Transaction updated successfully" });
+
   } catch (error) {
     console.error("❌ Error in payment callback:", error);
     return res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
+
